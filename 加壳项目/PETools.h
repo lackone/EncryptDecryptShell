@@ -22,6 +22,8 @@ public:
 	DWORD AddSection(IN LPVOID pFileBuffer, IN DWORD fileSize, IN DWORD addSize, IN LPCTSTR addName, OUT LPVOID* pNewFileBuffer);
 	//拉伸文件buffer为imageBuffer
 	DWORD FileBufferToImageBuffer(IN LPVOID pFileBuffer, OUT LPVOID* pImageBuffer);
+	//修正重定位表
+	VOID ReviseRelocation(IN LPVOID pFileBuffer, IN DWORD offset);
 	//将TCHAR转换成CHAR
 	VOID TCHARToChar(IN LPCTSTR tstr, OUT LPSTR* str);
 	//加密，最简单的异或

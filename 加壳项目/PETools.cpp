@@ -297,13 +297,66 @@ DWORD PETools::FileBufferToImageBuffer(IN LPVOID pFileBuffer, OUT LPVOID* pImage
 	//3、遍历拷贝节
 	for (int i = 0; i < pe->NumberOfSections; i++)
 	{
-		memcpy((LPBYTE)imgBuf + section->VirtualAddress, (LPBYTE)pFileBuffer + section->PointerToRawData, section->SizeOfRawData);
+		memcpy((LPBYTE)imgBuf + section->VirtualAddress, (LPBYTE)pFileBuffer + section->PointerToRawData, max(section->SizeOfRawData, section->Misc.VirtualSize));
 		section++;
 	}
 
 	*pImageBuffer = imgBuf;
 
 	return opt->SizeOfImage;
+}
+
+/**
+ * 修正重定位表
+ */
+VOID PETools::ReviseRelocation(IN LPVOID pFileBuffer, IN DWORD offset)
+{
+	PIMAGE_DOS_HEADER dos;
+	PIMAGE_NT_HEADERS nt;
+	PIMAGE_FILE_HEADER pe;
+	PIMAGE_OPTIONAL_HEADER opt;
+	PIMAGE_SECTION_HEADER section;
+	PIMAGE_SECTION_HEADER last_section;
+	IMAGE_DATA_DIRECTORY* dir;
+
+
+	dos = PIMAGE_DOS_HEADER(pFileBuffer);
+	nt = PIMAGE_NT_HEADERS((LPBYTE)dos + dos->e_lfanew);
+	pe = PIMAGE_FILE_HEADER((LPBYTE)nt + 4);
+	opt = PIMAGE_OPTIONAL_HEADER((LPBYTE)pe + IMAGE_SIZEOF_FILE_HEADER);
+	section = PIMAGE_SECTION_HEADER((LPBYTE)opt + pe->SizeOfOptionalHeader);
+	last_section = section + pe->NumberOfSections - 1;
+	dir = opt->DataDirectory;
+
+	DWORD relFoa = RvaToFoa(pFileBuffer, dir[5].VirtualAddress);
+
+	PIMAGE_BASE_RELOCATION relDir = (PIMAGE_BASE_RELOCATION)((LPBYTE)pFileBuffer + relFoa);
+
+	while (relDir->SizeOfBlock && relDir->VirtualAddress)
+	{
+		int nums = (relDir->SizeOfBlock - 8) / 2;
+
+		LPWORD start = LPWORD((LPBYTE)relDir + 8);
+
+		for (int i = 0; i < nums; i++)
+		{
+			WORD type = ((*start) & 0xF000) >> 12;
+
+			if (type == 3)
+			{
+				//VirtualAddress+后12位，才是真正的RVA
+				DWORD rva = relDir->VirtualAddress + ((*start) & 0x0FFF);
+
+				LPDWORD addr = LPDWORD((LPBYTE)pFileBuffer + RvaToFoa(pFileBuffer, rva));
+
+				*addr = *addr + offset;
+			}
+
+			start++;
+		}
+
+		relDir = (PIMAGE_BASE_RELOCATION)((LPBYTE)relDir + relDir->SizeOfBlock);
+	}
 }
 
 /**
