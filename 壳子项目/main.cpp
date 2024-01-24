@@ -106,10 +106,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		MessageBox(NULL, TEXT("获取ZwUnmapViewOfSection失败"), TEXT("提示"), MB_OK);
 		return -1;
 	}
-	ZwUnmapViewOfSection(pi.hProcess, GetModuleHandle(NULL));
+	//注意这里卸载的是shellImageBase
+	ZwUnmapViewOfSection(pi.hProcess, (PVOID)shellImageBase);
 
 	//6、在指定的位置分配空间：位置就是SRC的ImageBase  大小就是SRC的SizeOfImage
 	PIMAGE_OPTIONAL_HEADER srcOptHeader = pe.GetOptionHeader(srcData);
+
+	Tools::OutputDebugStringFormat(TEXT("DEBUG srcImageBase 0x%x"), srcOptHeader->ImageBase);
 
 	//尝试申请内存
 	//我们在shellImageBase处申请，不使用SRC的ImageBase(srcOptHeader->ImageBase)，防止ASLR
@@ -144,6 +147,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	//10、修改外壳程序的Context
 	//将Context的ImageBase改成SRC的ImageBase
 	DWORD srcImageBase = (DWORD)address;
+
+	Tools::OutputDebugStringFormat(TEXT("DEBUG srcImageBase 0x%x"), srcImageBase);
 
 	if (!WriteProcessMemory(pi.hProcess, (LPVOID)(ctx.Ebx + 8), &srcImageBase, 4, NULL))
 	{
